@@ -4,6 +4,14 @@ import {Colors, Fonts, Icons} from '../../themes/Themes';
 import {ScrollView} from 'react-native-gesture-handler';
 import normalize from '../../utils/normalize';
 import ModalTask from '../../components/ModalTask';
+import AnalogClock from '../../components/AnalogClock';
+
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good Morning';
+  if (hour < 17) return 'Good Afternoon';
+  return 'Good Evening';
+};
 
 const Home = props => {
   const [isVisible, setIsVisible] = useState(false);
@@ -79,20 +87,31 @@ const Home = props => {
           />
           <Text
             style={{
-              fontFamily: Fonts.roboto_Thin,
+              fontFamily: Fonts.Mochiy_Regular,
               color: Colors.white,
-              fontSize: normalize(16),
+              fontSize: normalize(15),
               textAlign: 'center',
               marginTop: normalize(20),
             }}>
-            Welcome Pratik !
+            Welcome Pratik
           </Text>
         </View>
         <Text
           style={{
-            fontSize: normalize(13),
-            fontFamily: Fonts.Poppins_SemiBold,
-            marginLeft: normalize(15),
+            alignSelf: 'flex-end',
+            marginRight: normalize(20),
+            marginTop: normalize(20),
+            fontFamily: Fonts.Mochiy_Regular,
+            color: 'black',
+          }}>
+          {getGreeting()}
+        </Text>
+        <AnalogClock size={160} />
+        <Text
+          style={{
+            fontSize: normalize(10),
+            fontFamily: Fonts.Mochiy_Regular,
+            marginLeft: normalize(20),
             marginTop: normalize(20),
             color: Colors.black,
           }}>
@@ -101,7 +120,7 @@ const Home = props => {
 
         <View
           style={{
-            height: normalize(330),
+            height: normalize(270),
             width: '85%',
             backgroundColor: Colors.white,
             alignSelf: 'center',
@@ -109,6 +128,7 @@ const Home = props => {
             borderRadius: normalize(8),
             shadowColor: Colors.black,
             elevation: normalize(4),
+            marginBottom: normalize(80),
           }}>
           <Text
             style={{
@@ -141,7 +161,7 @@ const Home = props => {
             style={{
               // height: normalize(10),
               width: '85%',
-              backgroundColor: 'orange',
+              // backgroundColor: 'orange',
               alignSelf: 'center',
               marginTop: normalize(10),
               marginBottom: normalize(20),
