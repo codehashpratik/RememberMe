@@ -160,8 +160,8 @@ const Home = props => {
           <ScrollView
             style={{
               // height: normalize(10),
-              width: '85%',
-              // backgroundColor: 'orange',
+              width: '90%',
+              backgroundColor: 'orange',
               alignSelf: 'center',
               marginTop: normalize(10),
               marginBottom: normalize(20),

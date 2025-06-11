@@ -29,7 +29,7 @@ const TextInput1 = props => {
     <View
       style={{
         height: normalize(40),
-        width: '85%',
+        width: props?.width,
         alignSelf: 'center',
         backgroundColor: Colors.white,
         marginVertical: props?.marginV,
@@ -127,6 +127,7 @@ TextInput1.defaultProps = {
   placeholder: 'placeholder',
   keyboardType: 'default',
   marginV: normalize(10),
+  width: '85%',
 };
 
 export default TextInput1;
