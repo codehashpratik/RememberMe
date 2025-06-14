@@ -164,7 +164,7 @@ import DatePicker from 'react-native-date-picker';
 import normalize from '../utils/normalize';
 import {Colors, Fonts} from '../themes/Themes';
 
-const DateTimePickerComponent = () => {
+const DateTimePickerComponent = ({dateTime, setDateTime}) => {
   const [date, setDate] = useState(new Date());
   const [open, setOpen] = useState(false);
 
@@ -187,7 +187,7 @@ const DateTimePickerComponent = () => {
         onPress={() => setOpen(true)}
         style={{
           borderWidth: 1,
-          marginTop:normalize(6),
+          marginTop: normalize(6),
           paddingVertical: normalize(10),
           borderRadius: normalize(10),
           alignItems: 'center',
@@ -212,6 +212,7 @@ const DateTimePickerComponent = () => {
         onConfirm={selectedDate => {
           setOpen(false);
           setDate(selectedDate);
+          setDateTime(selectedDate);
         }}
         onCancel={() => setOpen(false)}
         textColor={Colors.black}

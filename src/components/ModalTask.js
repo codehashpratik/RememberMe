@@ -201,16 +201,42 @@
 // };
 
 // export default ModalTask;
-import {View, Text, ScrollView, TouchableOpacity} from 'react-native';
+import {View, Text, ScrollView, TouchableOpacity, Alert} from 'react-native';
 import React, {useEffect, useState} from 'react';
 import Modal from 'react-native-modal';
 import normalize from '../utils/normalize';
 import {Colors, Fonts} from '../themes/Themes';
 import DateTimePickerComponent from './DateTimePickerComponent';
 import TextInput1 from './TextInput1';
+import {useDispatch} from 'react-redux';
+import { uploadTasktoDb } from '../redux/reducer/TaskReducer';
 
 const ModalTask = ({isVisible = false, onBackdropPress = () => {}}) => {
   const [priority, setPriority] = useState(null); // 'High' | 'Medium' | 'Low'
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskInfo, setTaskInfo] = useState('');
+  const [dateTime, setDateTime] = useState(null);
+  const dispatch = useDispatch();
+
+  const handleAddTask = () => {
+    if (!taskTitle.trim() || !taskInfo.trim() || !priority || !dateTime) {
+      Alert.alert(
+        'Validation Error',
+        'Please fill all fields and select a date & time.',
+      );
+      return;
+    }
+
+    // If valid, proceed with the task submission logic
+    console.log('Task Added:', {taskTitle, taskInfo, priority, dateTime});
+    const data = {
+      taskTitle: taskTitle,
+      taskInfo: taskInfo,
+      dateTime: dateTime,
+      priority: priority,
+    };
+    dispatch(uploadTasktoDb(data));
+  };
 
   useEffect(() => {
     console.log('priority is ::' + priority);
@@ -250,13 +276,24 @@ const ModalTask = ({isVisible = false, onBackdropPress = () => {}}) => {
               width={'100%'}
               placeholder={'Task Title'}
               marginV={normalize(4)}
+              value={taskTitle}
+              onChangeText={e => {
+                setTaskTitle(e);
+              }}
             />
             <TextInput1
               width={'100%'}
               placeholder={'Task Description (optional)'}
               marginV={normalize(4)}
+              value={taskInfo}
+              onChangeText={e => {
+                setTaskInfo(e);
+              }}
             />
-            <DateTimePickerComponent />
+            <DateTimePickerComponent
+              dateTime={dateTime}
+              setDateTime={setDateTime}
+            />
 
             <View
               style={{
@@ -338,6 +375,7 @@ const ModalTask = ({isVisible = false, onBackdropPress = () => {}}) => {
             </View>
 
             <TouchableOpacity
+              onPress={handleAddTask}
               style={{
                 width: '100%',
                 height: normalize(40),
