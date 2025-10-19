@@ -6,6 +6,8 @@ import { Colors, Fonts } from '../themes/Themes';
 import DateTimePickerComponent from './DateTimePickerComponent';
 import TextInput1 from './TextInput1';
 import { useDispatch, useSelector } from 'react-redux';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import {
   resetTaskStatus,
   selectUploadSuccess,
@@ -13,47 +15,99 @@ import {
 } from '../redux/reducer/TaskReducer';
 import showMessage from '../utils/showMessage';
 
-const ModalTask = ({ isVisible = false, onBackdropPress = () => {} }) => {
-  const [priority, setPriority] = useState(null); // 'High' | 'Medium' | 'Low'
+const ModalTask = ({
+  isVisible = false,
+  onBackdropPress = () => {},
+  editingTask = null,
+  setEditingTask, // <-- parent can reset editingTask
+}) => {
+  const [priority, setPriority] = useState(null);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskInfo, setTaskInfo] = useState('');
   const [dateTime, setDateTime] = useState(null);
   const IsSuccess = useSelector(selectUploadSuccess);
   const dispatch = useDispatch();
-  
 
+  // Prefill modal when editing
+  useEffect(() => {
+    if (editingTask) {
+      setTaskTitle(editingTask.taskTitle || '');
+      setTaskInfo(editingTask.taskInfo || '');
+      setPriority(editingTask.priority || null);
+      setDateTime(editingTask.dateTime ? editingTask.dateTime.toDate() : null);
+    } else {
+      setTaskTitle('');
+      setTaskInfo('');
+      setPriority(null);
+      setDateTime(null);
+    }
+  }, [editingTask]);
+
+  // Reset modal on success
   useEffect(() => {
     if (IsSuccess) {
-      showMessage('Task has been added to the list ');
-      onBackdropPress();
+      showMessage(
+        editingTask ? 'Task updated successfully!' : 'Task added successfully!',
+      );
+      handleClose();
       dispatch(resetTaskStatus());
     }
   }, [IsSuccess]);
 
-  const handleAddTask = () => {
-    if (!taskTitle.trim() || !taskInfo.trim() || !priority || !dateTime) {
+  const handleClose = () => {
+    onBackdropPress();
+    if (setEditingTask) setEditingTask(null); // reset parent editingTask
+  };
+
+  const handleAddOrEditTask = async () => {
+    if (!taskTitle.trim() || !priority || !dateTime) {
+      // Only mandatory fields are taskTitle, priority, dateTime
       Alert.alert(
         'Validation Error',
-        'Please fill all fields and select a date & time.',
+        'Please fill Task Title, Priority and Date/Time.',
       );
       return;
     }
 
-    // If valid, proceed with the task submission logic
-    console.log('Task Added:', { taskTitle, taskInfo, priority, dateTime });
     const data = {
-      taskTitle: taskTitle,
-      taskInfo: taskInfo,
-      dateTime: dateTime,
-      priority: priority,
-      status: 'pending',
+      taskTitle,
+      priority,
+      dateTime,
     };
-    dispatch(uploadTasktoDb(data));
-  };
 
-  useEffect(() => {
-    console.log('priority is ::' + priority);
-  }, [priority]);
+    // Only include optional fields if user changed them
+    if (taskInfo.trim()) data.taskInfo = taskInfo;
+
+    if (editingTask?.id) {
+      // UPDATE existing task
+      try {
+        const currentUser = auth().currentUser;
+        if (!currentUser) throw new Error('User not authenticated');
+
+        // Merge old data with new, keep unchanged fields
+        const updatedData = {
+          ...editingTask, // original task data
+          ...data, // only changed fields
+        };
+
+        await firestore()
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('tasks')
+          .doc(editingTask.id)
+          .update(updatedData);
+
+        console.log('✅ Task updated:', updatedData);
+        handleClose();
+      } catch (err) {
+        console.error('❌ Error updating task:', err);
+        Alert.alert('Error', 'Failed to update task.');
+      }
+    } else {
+      // ADD new task
+      dispatch(uploadTasktoDb({ ...data, status: 'pending' }));
+    }
+  };
 
   return (
     <Modal
@@ -63,8 +117,8 @@ const ModalTask = ({ isVisible = false, onBackdropPress = () => {} }) => {
       animationOut={'slideOutDown'}
       animationInTiming={700}
       animationOutTiming={800}
-      onBackButtonPress={onBackdropPress}
-      onBackdropPress={onBackdropPress}
+      onBackButtonPress={handleClose}
+      onBackdropPress={handleClose}
       style={{
         width: '100%',
         height: '100%',
@@ -92,93 +146,47 @@ const ModalTask = ({ isVisible = false, onBackdropPress = () => {} }) => {
               placeholder={'Task Title'}
               marginV={normalize(4)}
               value={taskTitle}
-              onChangeText={e => {
-                setTaskTitle(e);
-              }}
+              onChangeText={setTaskTitle}
             />
             <TextInput1
               width={'100%'}
               placeholder={'Task Description (optional)'}
               marginV={normalize(4)}
               value={taskInfo}
-              onChangeText={e => {
-                setTaskInfo(e);
-              }}
+              onChangeText={setTaskInfo}
             />
             <DateTimePickerComponent
               dateTime={dateTime}
               setDateTime={setDateTime}
             />
 
+            {/* Priority Buttons */}
             <View
               style={{
-                height: 1,
-                width: '100%',
-                backgroundColor: Colors.black,
-                alignSelf: 'center',
-                marginVertical: normalize(12),
-                marginTop: normalize(40),
-              }}
-            />
-            <View
-              style={{
-                height: normalize(20),
-                width: normalize(95),
-                alignSelf: 'center',
-                backgroundColor: Colors.grey_white,
-                justifyContent: 'center',
-                alignItems: 'center',
-                position: 'absolute',
-                bottom: normalize(120),
-              }}
-            >
-              <Text
-                style={{
-                  textAlign: 'center',
-                  fontFamily: Fonts.Poppins_Regular,
-                  fontSize: normalize(12),
-                  color: Colors.black,
-                }}
-              >
-                Select Priority
-              </Text>
-            </View>
-
-            <View
-              style={{
-                height: normalize(35),
-                width: '100%',
                 flexDirection: 'row',
-                alignSelf: 'center',
+                height: normalize(35),
+                marginTop: normalize(40),
               }}
             >
               {['High', 'Medium', 'Low'].map(level => {
-                const backgroundColors = {
+                const bgColors = {
                   High: 'red',
                   Medium: 'orange',
                   Low: 'lightgreen',
                 };
                 const isSelected = priority === level;
-
                 return (
                   <TouchableOpacity
                     key={level}
                     onPress={() => setPriority(level)}
                     style={{
                       flex: 1,
-                      backgroundColor: backgroundColors[level],
+                      backgroundColor: bgColors[level],
                       justifyContent: 'center',
                       alignItems: 'center',
                       opacity: isSelected ? 0.6 : 1,
-                      borderTopLeftRadius: level === 'High' ? normalize(14) : 0,
-                      borderBottomLeftRadius:
-                        level === 'High' ? normalize(14) : 0,
-                      borderTopRightRadius: level === 'Low' ? normalize(14) : 0,
-                      borderBottomRightRadius:
-                        level === 'Low' ? normalize(14) : 0,
-                      borderLeftWidth: level === 'Medium' ? 3 : 0,
-                      borderRightWidth: level === 'Medium' ? 3 : 0,
-                      borderColor: 'white',
+                      borderRadius: normalize(14),
+                      marginHorizontal: level === 'Medium' ? normalize(2) : 0,
                     }}
                   >
                     <Text
@@ -195,7 +203,7 @@ const ModalTask = ({ isVisible = false, onBackdropPress = () => {} }) => {
             </View>
 
             <TouchableOpacity
-              onPress={handleAddTask}
+              onPress={handleAddOrEditTask}
               style={{
                 width: '100%',
                 height: normalize(40),
@@ -215,7 +223,7 @@ const ModalTask = ({ isVisible = false, onBackdropPress = () => {} }) => {
                   fontSize: normalize(13),
                 }}
               >
-                Add Task
+                {editingTask ? 'Update Task' : 'Add Task'}
               </Text>
             </TouchableOpacity>
           </View>

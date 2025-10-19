@@ -16,6 +16,8 @@ import ModalTask from '../../components/ModalTask';
 import AnalogClock from '../../components/AnalogClock';
 import { useIsFocused } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import {
   getTaskList,
   resetTaskStatus,
@@ -34,6 +36,7 @@ const Home = props => {
   const [selectedPriority, setSelectedPriority] = useState(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
 
   const isFocused = useIsFocused();
   const tasklist = useSelector(selectTaskList) || [];
@@ -58,26 +61,33 @@ const Home = props => {
   }, [dispatch]);
 
   const handleEditTask = useCallback(item => {
-    // You can reuse your ModalTask for editing
-    // For now, pass selected task to modal and open it
-    setSelectedPriority(item.priority);
+    setSelectedTask(item); // <-- Pass full task object
     setIsVisible(true);
-    // Later you can enhance ModalTask to accept "editingTask" prop and prefill fields
   }, []);
 
   // Handle Mark Completed
   const handleMarkComplete = useCallback(
     async item => {
+      console.log('🔥 handleMarkComplete called for task:', item);
+
       try {
         if (!item.id) {
-          console.warn('No document ID found for task:', item);
+          console.warn('⚠️ No document ID found for task:', item);
           return;
         }
 
         setLoading(true);
+        console.log('⏳ Setting loading = true');
 
         const currentUser = auth().currentUser;
+        console.log('👤 Current user:', currentUser);
+
         if (!currentUser) throw new Error('User not authenticated');
+
+        // Firestore update
+        console.log(
+          `📡 Updating Firestore: /users/${currentUser.uid}/tasks/${item.id}`,
+        );
 
         await firestore()
           .collection('users')
@@ -86,12 +96,20 @@ const Home = props => {
           .doc(item.id)
           .update({ status: 'completed' });
 
-        console.log(`✅ Task "${item.taskTitle}" marked completed`);
-        await fetchTasks(); // refresh UI
+        console.log(
+          `✅ Task "${item.taskTitle}" marked completed in Firestore`,
+        );
+
+        // Refresh tasks
+        console.log('🔄 Fetching updated task list...');
+        await fetchTasks();
+
+        console.log('🎉 Task list refreshed after marking complete');
       } catch (err) {
         console.error('❌ Error marking task complete:', err);
       } finally {
         setLoading(false);
+        console.log('⏹️ Loading set to false');
       }
     },
     [fetchTasks],
@@ -538,9 +556,18 @@ const Home = props => {
       </ScrollView>
 
       {/* Add Task Modal */}
-      <ModalTask
+      {/* <ModalTask
         isVisible={isVisible}
         onBackdropPress={() => setIsVisible(false)}
+      /> */}
+      <ModalTask
+        isVisible={isVisible}
+        onBackdropPress={() => {
+          setIsVisible(false);
+          setSelectedTask(null); // reset after closing
+        }}
+        editingTask={selectedTask} // <-- full task object now
+        setEditingTask={setSelectedTask} // optional, internal reset
       />
     </View>
   );
