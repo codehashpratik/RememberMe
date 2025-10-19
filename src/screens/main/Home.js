@@ -23,6 +23,7 @@ import {
   resetTaskStatus,
   selectTaskList,
 } from '../../redux/reducer/TaskReducer';
+import { SelectAvatar } from '../../redux/reducer/ProfileReducer';
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -37,6 +38,9 @@ const Home = props => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
+  const [userName, setUserName] = useState('');
+  const [userAvatar, setUserAvatar] = useState(null);
+  const AvatarUpdated = useSelector(SelectAvatar);
 
   const isFocused = useIsFocused();
   const tasklist = useSelector(selectTaskList) || [];
@@ -64,6 +68,34 @@ const Home = props => {
     setSelectedTask(item); // <-- Pass full task object
     setIsVisible(true);
   }, []);
+
+  const fetchUserProfile = async () => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    try {
+      const doc = await firestore().collection('users').doc(uid).get();
+      if (doc.exists) {
+        const data = doc.data();
+        setUserName(data.name || '');
+        setUserAvatar(data.avatar || null); // <-- this is key
+      }
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
+
+  useEffect(() => {
+    if (AvatarUpdated == true) {
+      fetchUserProfile();
+    }
+  }, [AvatarUpdated]);
+
+  const firstName = userName.split(' ')[0] || 'User';
 
   // Handle Mark Completed
   const handleMarkComplete = useCallback(
@@ -206,7 +238,7 @@ const Home = props => {
             />
           </TouchableOpacity>
           <Image
-            source={Icons.welcomeBack}
+            source={userAvatar ? { uri: userAvatar } : Icons.welcomeBack}
             style={{
               height: normalize(60),
               width: normalize(60),
@@ -228,7 +260,7 @@ const Home = props => {
               marginTop: normalize(20),
             }}
           >
-            {getGreeting()} Pratik
+            {getGreeting()} {firstName}
           </Text>
         </View>
 

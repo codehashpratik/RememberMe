@@ -17,7 +17,7 @@ const Icons = {
   welcomeBack: require('../assets/images/welcomeBack.png'),
   drawer: require('../assets/icon/drawer.png'),
   edit: require('../assets/icon/edit.png'),
-  about: require('../assets/icon/info.png'),
+  TermsandConditions: require('../assets/icon/info.png'),
   home: require('../assets/icon/home.png'),
   contact: require('../assets/icon/contact.png'),
   logout: require('../assets/icon/logout.png'),
@@ -36,4 +36,4 @@ export const Fonts = {
   roboto_Thin: 'Roboto-Thin',
 };
 
-export {Colors, Icons};
+export { Colors, Icons };

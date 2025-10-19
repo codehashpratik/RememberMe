@@ -1,4 +1,11 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  StatusBar,
+} from 'react-native';
 import React, { useEffect, useState } from 'react';
 import Modal from 'react-native-modal';
 import normalize from '../utils/normalize';
@@ -108,11 +115,41 @@ const ModalTask = ({
       dispatch(uploadTasktoDb({ ...data, status: 'pending' }));
     }
   };
+  const handleDeleteTask = async () => {
+    if (!editingTask?.id) return;
+
+    Alert.alert('Delete Task', 'Are you sure you want to delete this task?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const currentUser = auth().currentUser;
+            if (!currentUser) throw new Error('User not authenticated');
+
+            await firestore()
+              .collection('users')
+              .doc(currentUser.uid)
+              .collection('tasks')
+              .doc(editingTask.id)
+              .delete();
+
+            showMessage('Task deleted successfully!');
+            handleClose(); // close modal
+          } catch (err) {
+            console.error('❌ Error deleting task:', err);
+            Alert.alert('Error', 'Failed to delete task.');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <Modal
       isVisible={isVisible}
-      backdropOpacity={0.5}
+      backdropOpacity={0.6}
       animationIn={'zoomIn'}
       animationOut={'slideOutDown'}
       animationInTiming={700}
@@ -132,7 +169,7 @@ const ModalTask = ({
           <View
             style={{
               width: '90%',
-              height: normalize(380),
+              height: editingTask ? normalize(420) : normalize(380),
               backgroundColor: Colors.grey_white,
               marginTop: normalize(190),
               alignSelf: 'center',
@@ -226,6 +263,32 @@ const ModalTask = ({
                 {editingTask ? 'Update Task' : 'Add Task'}
               </Text>
             </TouchableOpacity>
+            {editingTask?.id && (
+              <TouchableOpacity
+                onPress={handleDeleteTask}
+                style={{
+                  width: '100%',
+                  height: normalize(40),
+                  backgroundColor: 'red',
+                  marginTop: normalize(12),
+                  shadowColor: 'black',
+                  borderRadius: normalize(7),
+                  elevation: normalize(6),
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    color: Colors.white,
+                    fontFamily: Fonts.Poppins_Regular,
+                    fontSize: normalize(13),
+                  }}
+                >
+                  Delete Task
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </View>

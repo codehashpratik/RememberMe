@@ -1,22 +1,103 @@
-import {View, Text, Image, TouchableOpacity, ScrollView} from 'react-native';
-import React from 'react';
-import {Colors, Fonts, Icons} from '../themes/Themes';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  ScrollView,
+  Share,
+  Linking,
+  Platform,
+  Alert,
+} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Colors, Fonts, Icons } from '../themes/Themes';
 import normalize from '../utils/normalize';
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import AvatarPickerModal from './AvatarPickerModal';
+import { UpdateProfileAvatar } from '../redux/reducer/ProfileReducer';
+import { useDispatch } from 'react-redux';
 
 const CustomDrawer = props => {
-  const {state, descriptors, navigation} = props;
+  const [userName, setUserName] = useState('');
+  const [userAvatar, setUserAvatar] = useState(null);
+  const { state, descriptors, navigation } = props;
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false);
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const dispatch = useDispatch();
+  const fetchUserProfile = async () => {
+    const uid = auth().currentUser?.uid;
+    if (!uid) return;
+
+    try {
+      const doc = await firestore().collection('users').doc(uid).get();
+      if (doc.exists) {
+        const data = doc.data();
+        setUserName(data.name || '');
+        setUserAvatar(data.avatar || null); // <-- this is key
+      }
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+    }
+  };
+
+  const handleTellAFriend = async () => {
+    console.log('this much');
+    try {
+      const message = `Check out this awesome app: https://yourapp.link`;
+
+      // On Android you can try to open WhatsApp directly
+      if (Platform.OS === 'android') {
+        const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+        const supported = await Linking.canOpenURL(url);
+        if (supported) {
+          await Linking.openURL(url);
+          return;
+        }
+      }
+
+      // Fallback: open system share sheet
+      const result = await Share.share({
+        message,
+        title: 'Share with a friend',
+        url: 'https://yourapp.link', // optional, some apps may use it
+      });
+
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          console.log('Shared with activity type: ', result.activityType);
+        } else {
+          console.log('Shared successfully');
+        }
+      } else if (result.action === Share.dismissedAction) {
+        console.log('Share dismissed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Unable to share: ' + error.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
   return (
     <View
       style={{
         flex: 1,
         backgroundColor: Colors.grey_white,
-      }}>
+      }}
+    >
       <ScrollView
         style={{
           flex: 1,
           backgroundColor: Colors.grey_white,
-        }}>
+        }}
+      >
         <TouchableOpacity
+          onPress={() => {
+            setAvatarModalVisible(true);
+            dispatch(UpdateProfileAvatar(false));
+          }}
           style={{
             height: normalize(85),
             width: normalize(85),
@@ -24,9 +105,10 @@ const CustomDrawer = props => {
             justifyContent: 'center',
             alignItems: 'center',
             marginTop: normalize(60),
-          }}>
+          }}
+        >
           <Image
-            source={Icons.welcomeBack}
+            source={userAvatar ? { uri: userAvatar } : Icons.welcomeBack}
             style={{
               height: normalize(100),
               width: normalize(100),
@@ -50,7 +132,8 @@ const CustomDrawer = props => {
               elevation: normalize(10),
               justifyContent: 'center',
               alignItems: 'center',
-            }}>
+            }}
+          >
             <Image
               source={Icons.edit}
               style={{
@@ -69,8 +152,9 @@ const CustomDrawer = props => {
             fontSize: normalize(17),
             marginTop: normalize(30),
             color: Colors.black,
-          }}>
-          Pratik Majee
+          }}
+        >
+          {userName}
         </Text>
         <Text
           style={{
@@ -79,8 +163,9 @@ const CustomDrawer = props => {
             fontSize: normalize(10),
             marginTop: normalize(5),
             color: Colors.moonstone_blue,
-          }}>
-          Pratickmajee@gmail.com
+          }}
+        >
+          {auth().currentUser.email}
         </Text>
         <View
           style={{
@@ -89,9 +174,10 @@ const CustomDrawer = props => {
             alignSelf: 'center',
             backgroundColor: Colors.moonstone_blue,
             marginTop: normalize(10),
-          }}></View>
+          }}
+        ></View>
         {state.routes.map((item, index) => {
-          const {options} = descriptors[item.key];
+          const { options } = descriptors[item.key];
           const label =
             options.tabBarLabel !== undefined
               ? options.tabBarLabel
@@ -126,13 +212,14 @@ const CustomDrawer = props => {
                 alignSelf: 'center',
                 borderRadius: normalize(11),
                 alignItems: 'center',
-              }}>
+              }}
+            >
               <Image
                 source={
                   index == 0
                     ? Icons.home
                     : index == 1
-                    ? Icons.about
+                    ? Icons.TermsandConditions
                     : Icons.contact
                 }
                 style={{
@@ -149,7 +236,8 @@ const CustomDrawer = props => {
                   color: isFocused ? Colors.white : Colors.sea_Green,
                   fontSize: normalize(13),
                   fontFamily: Fonts.Poppins_Regular,
-                }}>
+                }}
+              >
                 {label}
               </Text>
             </TouchableOpacity>
@@ -163,7 +251,8 @@ const CustomDrawer = props => {
             alignSelf: 'center',
             backgroundColor: Colors.moonstone_blue,
             marginTop: normalize(130),
-          }}></View>
+          }}
+        ></View>
         <TouchableOpacity
           style={{
             height: normalize(40),
@@ -174,7 +263,9 @@ const CustomDrawer = props => {
             alignSelf: 'center',
             borderRadius: normalize(11),
             alignItems: 'center',
-          }}>
+          }}
+          onPress={handleTellAFriend}
+        >
           <Image
             source={Icons.share}
             style={{
@@ -192,7 +283,8 @@ const CustomDrawer = props => {
               fontFamily: Fonts.Poppins_Regular,
               color: Colors.sea_Green,
               marginLeft: normalize(10),
-            }}>
+            }}
+          >
             Tell a Friend
           </Text>
         </TouchableOpacity>
@@ -206,7 +298,8 @@ const CustomDrawer = props => {
             alignSelf: 'center',
             borderRadius: normalize(11),
             alignItems: 'center',
-          }}>
+          }}
+        >
           <Image
             source={Icons.logout}
             style={{
@@ -224,11 +317,35 @@ const CustomDrawer = props => {
               fontFamily: Fonts.Poppins_Regular,
               color: Colors.sea_Green,
               marginLeft: normalize(10),
-            }}>
+            }}
+          >
             Log out
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <AvatarPickerModal
+        isVisible={avatarModalVisible}
+        onClose={() => setAvatarModalVisible(false)}
+        onAvatarSelect={async uri => {
+          try {
+            setSelectedAvatar(uri); // update locally first
+            const uid = auth().currentUser?.uid;
+            if (!uid) throw new Error('User not logged in');
+
+            // update Firestore
+            await firestore()
+              .collection('users')
+              .doc(uid)
+              .update({ avatar: uri });
+
+            console.log('✅ Avatar updated in Firestore:', uri);
+            fetchUserProfile();
+            dispatch(UpdateProfileAvatar(true));
+          } catch (err) {
+            console.error('❌ Error updating avatar:', err);
+          }
+        }}
+      />
     </View>
   );
 };
