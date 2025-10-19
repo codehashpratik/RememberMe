@@ -123,6 +123,38 @@ const initialState = {
   error: null,
 };
 
+// const TaskSlice = createSlice({
+//   name: 'Task',
+//   initialState,
+//   reducers: {
+//     resetTaskStatus: state => {
+//       state.success = false;
+//       state.error = null;
+//     },
+//   },
+//   extraReducers: builder => {
+//     builder
+//       .addCase(uploadTasktoDb.pending, state => {
+//         state.uploading = true;
+//         state.success = false; // reset success on new request
+//         state.error = null;
+//       })
+//       .addCase(uploadTasktoDb.fulfilled, state => {
+//         state.uploading = false;
+//         state.success = true; // set success on fulfillment
+//       })
+//       .addCase(uploadTasktoDb.rejected, (state, action) => {
+//         state.uploading = false;
+//         state.success = false;
+//         state.error = action.payload;
+//       })
+//       .addCase(getTaskList.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.taskList = action.payload;
+//         state.success = true; // set success on fulfillment
+//       });
+//   },
+// });
 const TaskSlice = createSlice({
   name: 'Task',
   initialState,
@@ -134,28 +166,39 @@ const TaskSlice = createSlice({
   },
   extraReducers: builder => {
     builder
+      // --- Upload Task ---
       .addCase(uploadTasktoDb.pending, state => {
         state.uploading = true;
-        state.success = false; // reset success on new request
+        state.success = false; // reset success on new upload
         state.error = null;
       })
       .addCase(uploadTasktoDb.fulfilled, state => {
         state.uploading = false;
-        state.success = true; // set success on fulfillment
+        state.success = true; // ✅ success only for upload
       })
       .addCase(uploadTasktoDb.rejected, (state, action) => {
         state.uploading = false;
         state.success = false;
         state.error = action.payload;
       })
+
+      // --- Fetch Tasks ---
+      .addCase(getTaskList.pending, state => {
+        state.loading = true;
+        state.error = null;
+        // ❌ DO NOT touch success here
+      })
       .addCase(getTaskList.fulfilled, (state, action) => {
         state.loading = false;
         state.taskList = action.payload;
-        state.success = true; // set success on fulfillment
+        // ❌ Do not set success = true here
+      })
+      .addCase(getTaskList.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });
-
 export const { resetTaskStatus } = TaskSlice.actions;
 export const selectUploadSuccess = state => state.TaskReducer.success;
 export const selectTaskList = state => state.TaskReducer.taskList;

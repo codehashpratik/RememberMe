@@ -5,16 +5,22 @@ import {
   Image,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView, // <-- use ScrollView from react-native
 } from 'react-native';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Colors, Fonts, Icons } from '../../themes/Themes';
-import { ScrollView } from 'react-native-gesture-handler';
 import normalize from '../../utils/normalize';
 import ModalTask from '../../components/ModalTask';
 import AnalogClock from '../../components/AnalogClock';
 import { useIsFocused } from '@react-navigation/native';
 import { useDispatch, useSelector } from 'react-redux';
-import { getTaskList, selectTaskList } from '../../redux/reducer/TaskReducer';
+import {
+  getTaskList,
+  resetTaskStatus,
+  selectTaskList,
+} from '../../redux/reducer/TaskReducer';
 
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -25,41 +31,122 @@ const getGreeting = () => {
 
 const Home = props => {
   const [isVisible, setIsVisible] = useState(false);
+  const [selectedPriority, setSelectedPriority] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
   const isFocused = useIsFocused();
-  const tasklist = useSelector(selectTaskList);
+  const tasklist = useSelector(selectTaskList) || [];
   const dispatch = useDispatch();
+
+  // fetchTasks - always resolves so we can stop loaders reliably
+  const fetchTasks = useCallback(async () => {
+    try {
+      console.log('fetchTasks: start');
+      dispatch(resetTaskStatus());
+      setLoading(prev => true);
+      // Wrap dispatch in Promise.resolve so it works whether your thunk returns a promise or not
+      await Promise.resolve(dispatch(getTaskList()));
+      console.log('fetchTasks: dispatch finished');
+    } catch (err) {
+      console.warn('fetchTasks error', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      console.log('fetchTasks: finished, loading/refreshing false');
+    }
+  }, [dispatch]);
+
+  const handleEditTask = useCallback(item => {
+    // You can reuse your ModalTask for editing
+    // For now, pass selected task to modal and open it
+    setSelectedPriority(item.priority);
+    setIsVisible(true);
+    // Later you can enhance ModalTask to accept "editingTask" prop and prefill fields
+  }, []);
+
+  // Handle Mark Completed
+  const handleMarkComplete = useCallback(
+    async item => {
+      try {
+        if (!item.id) {
+          console.warn('No document ID found for task:', item);
+          return;
+        }
+
+        setLoading(true);
+
+        const currentUser = auth().currentUser;
+        if (!currentUser) throw new Error('User not authenticated');
+
+        await firestore()
+          .collection('users')
+          .doc(currentUser.uid)
+          .collection('tasks')
+          .doc(item.id)
+          .update({ status: 'completed' });
+
+        console.log(`✅ Task "${item.taskTitle}" marked completed`);
+        await fetchTasks(); // refresh UI
+      } catch (err) {
+        console.error('❌ Error marking task complete:', err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchTasks],
+  );
 
   useEffect(() => {
     if (isFocused) {
-      //Task Data list
-      dispatch(getTaskList());
+      fetchTasks();
     }
-  }, [isFocused]);
+  }, [isFocused, fetchTasks]);
 
-  useEffect(() => {
-    if (tasklist != null || tasklist.length() > 0) {
-      console.log('the list  after useEffect is ::' + JSON.stringify(tasklist));
-    }
-  }, [tasklist]);
+  // Pull-to-refresh handler
+  const onRefresh = useCallback(() => {
+    console.log('onRefresh triggered');
+    setRefreshing(true);
+    // start a fetch; fetchTasks will turn refreshing off in finally
+    fetchTasks();
+  }, [fetchTasks]);
+
+  const filteredTasks = useMemo(() => {
+    if (!selectedPriority) return tasklist;
+    return tasklist.filter(
+      task =>
+        task.priority &&
+        task.priority.toString().toLowerCase() ===
+          selectedPriority.toLowerCase(),
+    );
+  }, [tasklist, selectedPriority]);
+
+  // show loader if initial loading OR when user triggers refresh
+  const showLoader = loading || refreshing;
 
   return (
-    <View
-      style={{
-        flex: 1,
-      }}
-    >
+    <View style={{ flex: 1 }}>
       <StatusBar
         translucent={true}
         backgroundColor="transparent"
         barStyle={'dark-content'}
         showHideTransition={'slide'}
       />
+
       <ScrollView
-        style={{
-          flex: 1,
-          backgroundColor: Colors.grey_white,
-        }}
+        style={{ flex: 1, backgroundColor: Colors.grey_white }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.moonstone_blue]} // android
+            tintColor={Colors.moonstone_blue} // ios
+          />
+        }
+        // important: allow pull to trigger even if content smaller than screen
+        contentContainerStyle={{ flexGrow: 1 }}
       >
+        {/* Header */}
         <View
           style={{
             height: normalize(210),
@@ -76,9 +163,7 @@ const Home = props => {
             }}
           />
           <TouchableOpacity
-            onPress={() => {
-              props.navigation.openDrawer();
-            }}
+            onPress={() => props.navigation.openDrawer()}
             style={{
               height: normalize(32),
               width: normalize(45),
@@ -128,18 +213,9 @@ const Home = props => {
             {getGreeting()} Pratik
           </Text>
         </View>
-        {/* <Text
-          style={{
-            alignSelf: 'flex-end',
-            marginRight: normalize(20),
-            marginTop: normalize(20),
-            fontFamily: Fonts.Mochiy_Regular,
-            color: 'black',
-          }}
-        >
-          {getGreeting()}
-        </Text> */}
+
         <AnalogClock size={160} />
+
         <Text
           style={{
             fontSize: normalize(10),
@@ -152,9 +228,10 @@ const Home = props => {
           Task Lists
         </Text>
 
+        {/* Task Card */}
         <View
           style={{
-            height: normalize(320),
+            minHeight: normalize(320),
             width: '85%',
             backgroundColor: Colors.white,
             alignSelf: 'center',
@@ -176,11 +253,8 @@ const Home = props => {
           >
             Daily Task
           </Text>
-          <TouchableOpacity
-            onPress={() => {
-              setIsVisible(true);
-            }}
-          >
+
+          <TouchableOpacity onPress={() => setIsVisible(true)}>
             <Image
               source={Icons.add}
               style={{
@@ -194,132 +268,8 @@ const Home = props => {
               }}
             />
           </TouchableOpacity>
-          {/* <ScrollView
-            style={{
-              // height: normalize(10),
-              width: '90%',
-              backgroundColor: 'orange',
-              alignSelf: 'center',
-              marginTop: normalize(10),
-              marginBottom: normalize(20),
-            }}
-          ></ScrollView> */}
-          {/* <ScrollView
-            style={{
-              width: '90%',
-              backgroundColor: '#fffff',
-              alignSelf: 'center',
-              marginTop: normalize(10),
-              marginBottom: normalize(20),
-            }}
-          >
-            {tasklist && tasklist.length > 0 ? (
-              tasklist.map((item, index) => (
-                <View
-                  key={index}
-                  style={{
-                    backgroundColor: Colors.grey_white,
-                    padding: normalize(10),
-                    borderRadius: normalize(6),
-                    marginBottom: normalize(10),
-                    shadowColor: Colors.black,
-                    shadowOpacity: 0.1,
-                    shadowOffset: { width: 0, height: 2 },
-                    elevation: 3,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: Fonts.Poppins_Regular,
-                      fontSize: normalize(12),
-                      color: Colors.black,
-                    }}
-                  >
-                    {item.taskTitle || 'Untitled Task'}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: Fonts.Poppins_Regular,
-                      fontSize: normalize(10),
-                      color: Colors.dark_grey,
-                      marginTop: 4,
-                    }}
-                  >
-                    {item.taskInfo || 'No description'}
-                  </Text>
-                </View>
-              ))
-            ) : (
-              <Text
-                style={{
-                  fontFamily: Fonts.Poppins_Regular,
-                  fontSize: normalize(12),
-                  color: Colors.black,
-                  textAlign: 'center',
-                  marginTop: normalize(20),
-                }}
-              >
-                No tasks available
-              </Text>
-            )}
-          </ScrollView> */}
-          {/* <FlatList
-            data={tasklist}
-            keyExtractor={(item, index) => index.toString()}
-            contentContainerStyle={{
-              width: '90%',
-              alignSelf: 'center',
-              marginTop: normalize(10),
-              marginBottom: normalize(20),
-            }}
-            ListEmptyComponent={() => (
-              <Text
-                style={{
-                  fontFamily: Fonts.Poppins_Regular,
-                  fontSize: normalize(12),
-                  color: Colors.black,
-                  textAlign: 'center',
-                  marginTop: normalize(20),
-                }}
-              >
-                No tasks available
-              </Text>
-            )}
-            renderItem={({ item }) => (
-              <View
-                style={{
-                  backgroundColor: Colors.grey_white,
-                  padding: normalize(10),
-                  borderRadius: normalize(6),
-                  marginBottom: normalize(10),
-                  shadowColor: Colors.black,
-                  shadowOpacity: 0.1,
-                  shadowOffset: { width: 0, height: 2 },
-                  elevation: 3,
-                }}
-              >
-                <Text
-                  style={{
-                    fontFamily: Fonts.Poppins_Regular,
-                    fontSize: normalize(12),
-                    color: Colors.black,
-                  }}
-                >
-                  {item.taskTitle || 'Untitled Task'}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: Fonts.Poppins_Regular,
-                    fontSize: normalize(10),
-                    color: Colors.dark_grey,
-                    marginTop: 4,
-                  }}
-                >
-                  {item.taskInfo || 'No description'}
-                </Text>
-              </View>
-            )}
-          /> */}
+
+          {/* Priority Filter Buttons */}
           <View
             style={{
               flexDirection: 'row',
@@ -327,30 +277,29 @@ const Home = props => {
               height: normalize(42),
               alignSelf: 'center',
               backgroundColor: '#56b6bd31',
-              // borderRadius: normalize(20),
               borderWidth: 0.5,
               borderColor: '#fff',
               padding: normalize(4),
-              // marginVertical: normalize(14),
               marginTop: normalize(14),
-
-              shadowOffset: { width: 0, height: 1 },
             }}
           >
-            {['High', 'Medium', 'Low'].map((level, index) => (
+            {['High', 'Medium', 'Low'].map(level => (
               <TouchableOpacity
                 key={level}
-                onPress={() => console.log(`Pressed: ${level}`)}
-                // activeOpacity={0.8}
+                onPress={() =>
+                  setSelectedPriority(selectedPriority === level ? null : level)
+                }
                 style={{
                   flex: 1,
-                  backgroundColor: 'white',
+                  backgroundColor:
+                    selectedPriority === level
+                      ? Colors.moonstone_blue
+                      : 'white',
                   marginHorizontal: normalize(2),
                   borderRadius: normalize(14),
                   justifyContent: 'center',
                   alignItems: 'center',
                   height: '100%',
-                  // light gradient effect imitation
                   borderWidth: 0.5,
                   borderColor: '#ddd',
                 }}
@@ -359,7 +308,7 @@ const Home = props => {
                   style={{
                     fontSize: normalize(12),
                     fontFamily: Fonts.Poppins_Medium,
-                    color: '#333',
+                    color: selectedPriority === level ? Colors.white : '#333',
                   }}
                 >
                   {level}
@@ -368,75 +317,227 @@ const Home = props => {
             ))}
           </View>
 
-          <ScrollView
-            style={{
-              width: '100%',
-              backgroundColor: '#ffffff',
-              alignSelf: 'center',
-              // marginTop: normalize(10),
-              marginBottom: normalize(20),
-            }}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Your FlatList goes here inside */}
-            <FlatList
-              data={tasklist}
-              scrollEnabled={false} // 🔴 disables internal scroll
-              keyExtractor={(item, index) => index.toString()}
-              contentContainerStyle={{
-                padding: normalize(10),
+          {/* Loading Animation */}
+          {showLoader ? (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: normalize(40),
               }}
-              ListEmptyComponent={() => (
-                <Text
-                  style={{
-                    fontFamily: Fonts.Poppins_Regular,
-                    fontSize: normalize(12),
-                    color: Colors.black,
-                    textAlign: 'center',
-                    marginTop: normalize(20),
-                  }}
-                >
-                  No tasks available
-                </Text>
-              )}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: Colors.grey_white,
-                    padding: normalize(10),
-                    borderRadius: normalize(6),
-                    marginBottom: normalize(10),
-                    shadowColor: Colors.black,
-                    shadowOpacity: 0.1,
-                    shadowOffset: { width: 0, height: 2 },
-                    elevation: 3,
-                  }}
-                >
+            >
+              <ActivityIndicator size="large" color={Colors.moonstone_blue} />
+              <Text
+                style={{
+                  fontFamily: Fonts.Poppins_Regular,
+                  color: Colors.dark_grey,
+                  marginTop: normalize(8),
+                }}
+              >
+                {refreshing ? 'Refreshing tasks...' : 'Loading tasks...'}
+              </Text>
+            </View>
+          ) : (
+            <View
+              style={{
+                width: '100%',
+                backgroundColor: '#fff',
+                alignSelf: 'center',
+                marginBottom: normalize(20),
+              }}
+            >
+              <FlatList
+                data={filteredTasks}
+                scrollEnabled={false}
+                keyExtractor={(item, index) => index.toString()}
+                contentContainerStyle={{ padding: normalize(10) }}
+                ListEmptyComponent={() => (
                   <Text
                     style={{
                       fontFamily: Fonts.Poppins_Regular,
                       fontSize: normalize(12),
                       color: Colors.black,
+                      textAlign: 'center',
+                      marginTop: normalize(20),
                     }}
                   >
-                    {item.taskTitle || 'Untitled Task'}
+                    No tasks available
                   </Text>
-                  <Text
+                )}
+                renderItem={({ item }) => (
+                  // <TouchableOpacity
+                  //   style={{
+                  //     backgroundColor: Colors.grey_white,
+                  //     padding: normalize(10),
+                  //     borderRadius: normalize(6),
+                  //     marginBottom: normalize(10),
+                  //     shadowColor: Colors.black,
+                  //     shadowOpacity: 0.1,
+                  //     shadowOffset: { width: 0, height: 2 },
+                  //     elevation: 3,
+                  //   }}
+                  // >
+                  //   <Text
+                  //     style={{
+                  //       fontFamily: Fonts.Poppins_Regular,
+                  //       fontSize: normalize(12),
+                  //       color: Colors.black,
+                  //     }}
+                  //   >
+                  //     {item.taskTitle || 'Untitled Task'}
+                  //   </Text>
+                  //   <Text
+                  //     style={{
+                  //       fontFamily: Fonts.Poppins_Regular,
+                  //       fontSize: normalize(10),
+                  //       color: Colors.dark_grey,
+                  //       marginTop: 4,
+                  //     }}
+                  //   >
+                  //     {item.taskInfo || 'No description'}
+                  //   </Text>
+                  //   <Text
+                  //     style={{
+                  //       fontFamily: Fonts.Poppins_Regular,
+                  //       fontSize: normalize(10),
+                  //       color: Colors.sea_Green,
+                  //       marginTop: 2,
+                  //     }}
+                  //   >
+                  //     Priority: {item.priority}
+                  //   </Text>
+                  // </TouchableOpacity>
+                  <View
                     style={{
-                      fontFamily: Fonts.Poppins_Regular,
-                      fontSize: normalize(10),
-                      color: Colors.dark_grey,
-                      marginTop: 4,
+                      backgroundColor: Colors.grey_white,
+                      padding: normalize(10),
+                      borderRadius: normalize(6),
+                      marginBottom: normalize(10),
+                      shadowColor: Colors.black,
+                      shadowOpacity: 0.1,
+                      shadowOffset: { width: 0, height: 2 },
+                      elevation: 3,
                     }}
                   >
-                    {item.taskInfo || 'No description'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </ScrollView>
+                    <Text
+                      style={{
+                        fontFamily: Fonts.Poppins_Regular,
+                        fontSize: normalize(12),
+                        color: Colors.black,
+                      }}
+                    >
+                      {item.taskTitle || 'Untitled Task'}
+                    </Text>
+
+                    <Text
+                      style={{
+                        fontFamily: Fonts.Poppins_Regular,
+                        fontSize: normalize(10),
+                        color: Colors.dark_grey,
+                        marginTop: 4,
+                      }}
+                    >
+                      {item.taskInfo || 'No description'}
+                    </Text>
+
+                    <Text
+                      style={{
+                        fontFamily: Fonts.Poppins_Regular,
+                        fontSize: normalize(10),
+                        color: Colors.sea_Green,
+                        marginTop: 2,
+                      }}
+                    >
+                      Priority: {item.priority}
+                    </Text>
+
+                    {/* --- Buttons Row --- */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        marginTop: normalize(10),
+                      }}
+                    >
+                      {/* Edit Button */}
+                      <TouchableOpacity
+                        onPress={() => handleEditTask(item)}
+                        style={{
+                          backgroundColor: Colors.moonstone_blue,
+                          flex: 0.48,
+                          paddingVertical: normalize(8),
+                          borderRadius: normalize(6),
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: Fonts.Poppins_Medium,
+                            color: Colors.white,
+                            fontSize: normalize(11),
+                          }}
+                        >
+                          Edit Task
+                        </Text>
+                      </TouchableOpacity>
+
+                      {/* Mark Complete Button */}
+                      {/* <TouchableOpacity
+                        onPress={() => handleMarkComplete(item)}
+                        style={{
+                          backgroundColor: Colors.sea_Green,
+                          flex: 0.48,
+                          paddingVertical: normalize(8),
+                          borderRadius: normalize(6),
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: Fonts.Poppins_Medium,
+                            color: Colors.white,
+                            fontSize: normalize(11),
+                          }}
+                        >
+                          Mark Completed
+                        </Text>
+                      </TouchableOpacity> */}
+                      <TouchableOpacity
+                        disabled={item.status === 'completed'}
+                        onPress={() => handleMarkComplete(item)}
+                        style={{
+                          backgroundColor:
+                            item.status === 'completed'
+                              ? '#ccc'
+                              : Colors.sea_Green,
+                          flex: 0.48,
+                          paddingVertical: normalize(8),
+                          borderRadius: normalize(6),
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: Fonts.Poppins_Medium,
+                            color: Colors.white,
+                            fontSize: normalize(11),
+                          }}
+                        >
+                          {item.status === 'completed'
+                            ? 'Completed'
+                            : 'Mark Completed'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
+
+      {/* Add Task Modal */}
       <ModalTask
         isVisible={isVisible}
         onBackdropPress={() => setIsVisible(false)}
