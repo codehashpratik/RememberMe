@@ -13,11 +13,12 @@ import { Colors, Fonts } from '../themes/Themes'; // adjust path as needed
 import normalize from '../utils/normalize'; // your normalize util
 
 const { width } = Dimensions.get('window');
+const avatarStyles = ['adventurer', 'avataaars', 'bottts', 'micah'];
 
-const avatarUrls = Array.from(
-  { length: 100 },
-  (_, i) => `https://avatar.iran.liara.run/public/${i + 1}`,
-);
+const avatarUrls = Array.from({ length: 100 }, (_, i) => {
+  const style = avatarStyles[i % avatarStyles.length];
+  return `https://api.dicebear.com/9.x/${style}/png?seed=user_${i}`;
+});
 
 const AvatarPickerModal = ({ isVisible, onClose, onAvatarSelect }) => {
   const [selectedAvatar, setSelectedAvatar] = useState(null);

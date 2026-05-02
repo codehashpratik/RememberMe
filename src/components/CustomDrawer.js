@@ -17,6 +17,8 @@ import firestore from '@react-native-firebase/firestore';
 import AvatarPickerModal from './AvatarPickerModal';
 import { UpdateProfileAvatar } from '../redux/reducer/ProfileReducer';
 import { useDispatch } from 'react-redux';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { signOut } from '../redux/reducer/AuthReducer';
 
 const CustomDrawer = props => {
   const [userName, setUserName] = useState('');
@@ -25,6 +27,7 @@ const CustomDrawer = props => {
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const dispatch = useDispatch();
+
   const fetchUserProfile = async () => {
     const uid = auth().currentUser?.uid;
     if (!uid) return;
@@ -33,8 +36,8 @@ const CustomDrawer = props => {
       const doc = await firestore().collection('users').doc(uid).get();
       if (doc.exists) {
         const data = doc.data();
-        setUserName(data.name || '');
-        setUserAvatar(data.avatar || null); // <-- this is key
+        setUserName(data.fullName || '');
+        setUserAvatar(data.avatarUrl || null); // <-- this is key
       }
     } catch (err) {
       console.error('Error fetching user profile:', err);
@@ -74,6 +77,19 @@ const CustomDrawer = props => {
       }
     } catch (error) {
       Alert.alert('Error', 'Unable to share: ' + error.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('USER_TOKEN'); // ❌ remove token
+      await auth().signOut(); // Firebase logout
+
+      dispatch(signOut()); // Redux reset
+
+      console.log('User logged out');
+    } catch (err) {
+      console.error('Logout error:', err);
     }
   };
 
@@ -289,6 +305,7 @@ const CustomDrawer = props => {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          onPress={handleLogout}
           style={{
             height: normalize(40),
             width: '90%',
@@ -336,7 +353,7 @@ const CustomDrawer = props => {
             await firestore()
               .collection('users')
               .doc(uid)
-              .update({ avatar: uri });
+              .update({ avatarUrl: uri });
 
             console.log('✅ Avatar updated in Firestore:', uri);
             fetchUserProfile();

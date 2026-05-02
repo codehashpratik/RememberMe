@@ -1,4 +1,4 @@
-import {createSlice} from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
 
 const initialState = {
   type: '',
@@ -34,6 +34,12 @@ const AuthSlice = createSlice({
       state.isToken = action.payload;
       state.type = action.type;
     },
+
+    // ✅ ADD THIS
+    signOut(state) {
+      state.isToken = null;
+      state.type = 'SIGN_OUT';
+    },
   },
 });
 
@@ -43,6 +49,7 @@ export const {
   getTokenSuccess,
   getTokenFaliure,
   signInSuccess,
+  signOut, // ✅ ADD THIS
 } = AuthSlice.actions;
 
 export default AuthSlice.reducer;

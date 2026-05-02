@@ -77,8 +77,9 @@ const Home = props => {
       const doc = await firestore().collection('users').doc(uid).get();
       if (doc.exists) {
         const data = doc.data();
-        setUserName(data.name || '');
-        setUserAvatar(data.avatar || null); // <-- this is key
+        console.log('the data is ::' + JSON.stringify(data));
+        setUserName(data.fullName || '');
+        setUserAvatar(data.avatarUrl || null); // <-- this is key
       }
     } catch (err) {
       console.error('Error fetching user profile:', err);
